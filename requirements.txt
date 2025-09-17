@@ -1,0 +1,14 @@
+openai
+langchain
+langchain-core
+langchain_openai
+python-dotenv
+langchain-chroma
+faiss-cpu
+streamlit
+streamlit-extras
+chromadb
+langsmith
+pypdf
+langchain_community
+asyncio
