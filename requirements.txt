@@ -12,3 +12,4 @@ langsmith
 pypdf
 langchain_community
 asyncio
+rank_bm25

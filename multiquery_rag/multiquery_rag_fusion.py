@@ -77,8 +77,8 @@ def reciprocal_rank_fusion(results: list[list], k=60, top_n=2):
     reranked_results: 알고리즘에 따라 재정렬된 문서 리스트
   """
 
-  # 각 고유한 문서에 대한 점수를 저장할 변수 초기화
-  fused_scores = []
+  # 각 고유한 문서에 대한 점수를 저장할 변수 딕셔너리 초기화
+  fused_scores = {}
 
   # 순위가 매겨진 문서 리스트를 반복 순회
   for docs in results:
@@ -91,3 +91,51 @@ def reciprocal_rank_fusion(results: list[list], k=60, top_n=2):
         fused_scores[doc_str] = 0
       # RRF 공식: 1 / (k + 순위)
       fused_scores[doc_str] += 1 / (k + rank)
+
+  # 계산된 점수에 따라 내림차순으로 정렬하여 최종 재정렬 결과 반환
+  reranked_results = [
+    (loads(doc), score) for doc, score in sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+  ]
+
+  # 재정렬된 결과에서 우선 순위가 높은 top_n개 문서 반환
+  return reranked_results[:top_n]
+
+# Multiquery + RAG-Fusion 체인 구성
+# 다양한 검색 쿼리를 생성하고 이 쿼리를 통해 얻은 문서들을 결합으로 최종적으로 가장 유의미한 문서들을 선정
+# 1. 쿼리 생성: 주어진 질문에 대해 여러 검색 쿼리를 생성. 하나의 질문을 여러 방향으로 확장하여 검색 범위를 넓힘
+# 2. 문서 검색: 생성된 각 쿼리에 대해 관련 문서들을 검색. 각 쿼리로부터 다양한 문서들이 반환되며, 이 문서들은 잠재적으로 중복되거나 유사한 내용이 포함될 수 있음
+# 3. RRF 알고리즘 적용: 여러 쿼리로부터 검색된 문서들을 RRF 알고리즘을 통해 결합하여 최종 순위를 계산. 각 문서의 순위를 평가하고, 가장 중요한 문서들을 재정렬
+retrieval_chain_rag_fusion = generate_queries | retriever.map() | reciprocal_rank_fusion
+
+# 질문에 대해 검색된 문서 호출
+question = "SK그룹 채용에 대해 알려주세요"
+docs = retrieval_chain_rag_fusion.invoke({'question': question})
+
+# 문서 개수
+# print('문서 개수: ', len(docs))
+
+# print("=" * 50)
+
+# 고유 문서
+print('고유 문서', docs)
+
+# 최종 RAG 체인 구성 및 실행
+# 사용자가 입력한 질문에 대한 최종 답변 생성 구성
+# RAG Fusion 과정을 통해 검색된 문서들을 바탕으로 LLM을 사용하여 답변을 생성하는 전체 프로세스를 자동화
+
+template = """
+다음 맥락을 바탕으로 질문에 답변해 주세요:
+{context}
+질문: {question}
+"""
+
+prompt = PromptTemplate.from_template(template)
+llm = ChatOpenAI(model_name='gpt-4o-mini', temperature=0)
+final_rag_chain = (
+  {'context': retrieval_chain_rag_fusion, 'question': RunnablePassthrough()}
+  | prompt
+  | llm
+  | StrOutputParser()
+)
+
+print(final_rag_chain.invoke({'question': question}))
