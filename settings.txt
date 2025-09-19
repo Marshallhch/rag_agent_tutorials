@@ -15,5 +15,22 @@ pip install langsmith
 pip install pypdf
 pip install langchain_community
 
+- 맥
+pip install poppler
+pip install tesseract
+
 pip install asyncio
 pip install rank_bm25
+
+pip install langchain-chroma
+pip install langchain-experimental
+pip install pillow
+pip install pydantic
+pip install lxml
+
+pip install pdf2image
+pip install pytesseract
+
+pip install matplotlib
+
+pip install hf_xet

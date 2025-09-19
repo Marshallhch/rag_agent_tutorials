@@ -13,3 +13,16 @@ pypdf
 langchain_community
 asyncio
 rank_bm25
+
+langchain-chroma
+langchain-experimental
+pillow
+pydantic
+lxml
+unstructured
+
+pdf2image
+pytesseract
+
+matplotlib
+hf_xet
