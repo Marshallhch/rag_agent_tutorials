@@ -198,7 +198,7 @@ from langchain_experimental.open_clip import OpenCLIPEmbeddings # 각각 클립 
 def create_multi_vector_retriever(
     vectorstore,
     text_summaries,
-    texts_2k_token,
+    texts,
     table_summaries,
     tables,
     image_summaries,
@@ -253,7 +253,7 @@ vectorstore = Chroma(
 retriever_multi_vector_img = create_multi_vector_retriever(
   vectorstore,
   text_summaries,
-  texts,
+  texts_2k_token,
   table_summaries,
   tables,
   image_summaries,
@@ -299,3 +299,176 @@ retriever_multi_vector_img = create_multi_vector_retriever(
 # 다중 모달 RAG 체인과 한국어 변환 RAG 체인을 결합.
 
 # ================================================ #
+
+# 입출력 작업을 지원하는 모듈. 파일이나 메모리에서 데이터를 읽고 쓰는 작업을 처리
+# 특히 BytesIO는 메모리 상에서 바이트 기반 데이터를 읽고 쓰는 데 사용되며 이미지 데이터를 처리할 때 매우 유용하다.
+import io
+import re
+from IPython.display import HTML, display
+# RunnableLambda: 함수를 실행 가능한 객체로 변환해서 다음 체인에 추가할 수 있도록 함
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from PIL import Image
+
+# 이미지를 처리하기 위한 함수 정의
+# 이미지가 Base64 형식으로 인코딩 되어 있는지 확인하고, 필요에 따라 이미지를 리사이즈한 후 다시 Base64로 반환
+# 이 함수는 Base64로 인코딩된 이미지 문자열을 HTML 태그로 변환하여 시각적으로 표시
+def plt_img_base64(img_base64):
+  image_html = f'<img src="data:image/jpeg;base64, {img_base64}" />'
+
+  # HTML 랜더링하여 이미지 표시
+  display(HTML(image_html))
+
+# 입력된 문자열이 base64인지 확인
+def looks_like_base64(sb):
+  return re.match("^[A-Za-z0-9+/]+[=]{0,2}$", sb) is not None
+
+# 입력된 base64 문자열이 이미지 데이터가 맞는지 확인
+def is_image_data(b64data):
+  image_signatures = {
+    b"\xff\xd8\xff": "jpg",
+    b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a": "png",
+    b"\x47\x49\x46\x38": "gif",
+    b"\x52\x49\x46\x46": "webp",
+  }
+
+  try:
+    header = base64.b64decode(b64data)[:8] # 처음 8바이트까지 헤더로 저장
+    for sig in image_signatures.items():
+      if header.startswith(sig):
+        return True
+      return False
+  except Exception:
+    return False
+
+# 이미지를 주어진 크기로 리사이즈하고, 다시 Base64로 변환하여 반환
+# 이미지 크기를 줄여 저장 공간을 줄이거나 네트워크 전송 시간을 단축하는 데 유용
+def resize_base64_image(base64_string, size=(128, 128)):
+  img_data = base64.b64decode(base64_string)
+  img = Image.open(io.BytesIO(img_data))
+
+  # 이미지 크기 조정
+  resized_img = img.resize(size, Image.LANCZOS) # LANCZOS - 이미지 크기 조정 시 사용되는 알고리즘
+
+  # 크기 조정된 이미지를 bytes 버퍼에 저장
+  buffered = io.BytesIO()
+  resized_img.save(buffered, format=img.format)
+
+  # 크기 조정된 이미지를 base64로 인코딩
+  return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+# 주어진 docs에서 base64로 인코딩된 이미지와 텍스트 데이터를 분리하여 처리
+# 이미지 데이터는 크기를 조정한 후 리스트에 저장하고 텍스트 데이터는 그대로 텍스트 리스트에 저장
+# 이를 통해 이미지와 텍스트 데이터를 따로 다룰 수 있다.
+def split_image_text_types(docs):
+  b64_images = []
+  texts = []
+  for doc in docs:
+    # 문서 유형이 Document일 경우 page_content 추출
+    if isinstance(doc, Document):
+      doc = doc.page_content
+    if looks_like_base64(doc) and is_image_data(doc): # 입력된 문자열이 base64이고, 이 문자열이 이미지 데이터일 때
+      doc = resize_base64_image(doc, size=(1300, 600))
+      b64_images.append(doc)
+  return {"images": b64_images, "texts": texts}
+
+# 투자 조언을 제공하는 멀티 모달 분석을 위한 프롬프트 메시지를 생성
+# 이미지와 텍스트 데이터를 포함한 data_dict를 받아 이를 바탕으로 프롬프트를 구성하여 투자 분석을 요청하는 메시지를 반환
+# 여기서는 이미지와 텍스트가 함께 제공될 수 있으며 해당 데이터를 프롬프트로 변환하여 LLM이 처리할 수 있도록 한다.
+def img_prompt_func(data_dict):
+  # 주어진 맥락을 하나의 문자열로 결합
+  formatted_texts = "\n".join(data_dict["context"]["texts"])
+  messages = []
+
+  # 이미지가 포함된 경우 메시지에 추가
+  if data_dict["context"]["texts"]:
+    for image in data_dict["context"]["texts"]:
+      image_message = {
+        "type": "image_url",
+        "image_url": {"url": f'data:image/jpeg;base64, {image}'}
+      }
+      messages.append(image_message)
+
+   # 분석할 텍스트 추가
+  text_message = {
+    "type": "text",
+    "text": (
+      "You are financial analyst tasking with providing investment advice.\n"
+      "You will be given a mixed of text, tables, and image(s) usually of charts or graphs.\n"
+      "Use this information to provide investment advice related to the user question. \n"
+      f"User-provided question: {data_dict['question']}\n\n"
+      "Text and / or tables:\n"
+      f"{formatted_texts}\n\n"
+      "Please provide the final answer in Korean(hangul)."
+    ),
+  }
+  messages.append(text_message)
+  return [HumanMessage(content=messages)]
+
+# 멀티모달 RAG 체인 구성
+# 텍스트와 이미지가 섞인 입력을 처리해서 질문에 답변할 수 있는 파이프라인 구성
+
+# context: 데이터를 처리하는 핵심 요소. retriever는 검색된 데이터를 가져오며, 이 데이터는 텍스트와 이미지로 이뤄져 있을 수 있다.
+# 이 데이터를 RunnableLambda(split_image_text_types) 함수를 사용하여 텍스트와 이미지로 분리한다.
+
+# question: 사용자가 입력한 줄문을 직접 전달한다. 여기서 RunnablePassthrough() 함수를 사용하여 입력된 질문을 그대로 전달한다.
+
+# img_prompt_func: 텍스트와 이미지를 분석하기 위한 프롬프트를 생성하는 역할을 한다.
+# 텍스트와 이미지가 결합된 데이터를 LLM이 이해할 수 있도록 적절한 형식의 프롬프트로 변환한다.
+# 프롬프트는 사용자의 질문, 이미지, 그리고 추가 텍스트 정보를 포함한다.
+
+# multi_modal_rag_chain(): 텍스트, 이밎, 표 등의 데이터를 분석하기 위해 멀티 모달 RAG 체인을 생성한다.
+# RAG 체인은 다양한 형식의 데이터를 기반으로 추가적인 정보 검색 및 응답 생성을 치리하는데 사용된다.
+def multi_modal_rag_chain(retriever):
+  # 다중 모드 LLM 생성
+  model = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_tokens=1024)
+
+  # RAG 파이프라인 구성
+  chain = (
+    {
+      "context": retriever | RunnableLambda(split_image_text_types),
+      "question": RunnablePassthrough()
+    }
+    | RunnableLambda(img_prompt_func)
+    | model
+    | StrOutputParser()
+  )
+
+  return chain
+
+def korean_convert_rag():
+  model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+  # 프롬프트 템플릿 설정
+  prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that translates English to Korean."),
+    ("human", "Translate the following English text to Korean: {english_text}")
+  ])
+
+  # 파이프라인 구성
+  chain = (
+    {"english_text": RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+  )
+
+  return chain
+
+# RAG 종합 체인 생성
+chain_multimodal_rag = multi_modal_rag_chain(retriever_multi_vector_img)
+
+# 영어로 답변이 나온다면 번역
+korean_convert_rag = korean_convert_rag()
+final_multimodal_rag = chain_multimodal_rag | korean_convert_rag
+
+# 조회 결과 확인 및 RAG 체인 생성
+query = "주가 변동률과 가장 관련 있는 자료를 찾아주세요."
+docs = retriever_multi_vector_img(query)
+
+# 변환된 결과 개수 
+print(len(docs))
+
+print("=" * 50)
+
+# 첫번째 문서를 이미지로 표시
+plt_img_base64(docs[0])
