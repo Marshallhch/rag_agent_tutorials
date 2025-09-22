@@ -25,7 +25,7 @@ def extract_pdf_elements(path, fname):
     filename=os.path.join(path, fname),
     extract_images_in_pdf=False,  # poppler 의존성 문제로 이미지 추출 비활성화
     infer_table_structure=True, # 테이블 구조를 추론
-    chunking_strategy="by_title", # 타이틀을 기준으로 텍스트를 블록으로 분한
+    chunking_strategy="by_title", # 타이틀을 기준으로 텍스트를 블록으로 분할
     max_characters=4000, # 최대 4000자로 텍스트 블록을 제한
     new_after_n_chars=3800, # 3800자 이후에 새로운 블록 생성
     combine_text_under_n_chars=2000, # 2000자 이하의 텍스트는 결합
