@@ -38,3 +38,4 @@ arxiv
 langchainhub
 langgraph
 crewai
+datasets

@@ -108,11 +108,15 @@ def generate_text_summaries(texts, tables, summarize_texts=False):
 
   # 테이블 요약
   if tables:
-    tables_summaries = summarize_chain.batch(texts, {'max_concurrency': 5})
+    tables_summaries = summarize_chain.batch(tables, {'max_concurrency': 5}) # 수정
 
   return text_summaries, tables_summaries
 
 text_summaries, table_summaries = generate_text_summaries(texts_2k_token, tables, summarize_texts=True)
+
+# print(text_summaries)
+# print("=" * 50)
+# print(table_summaries)
 
 # 이미지 인코딩
 def encode_image(image_path):
@@ -181,6 +185,10 @@ figures_directory = os.path.join(current_directory, 'figures')
 # 이미지 요약 생성
 img_base64_list, image_summaries = generate_img_summaries(figures_directory)
 
+# 이미지 개수
+# print(f'이미지 개수: {len(img_base64_list)}')
+# print(f'요약 개수: {len(image_summaries)}')
+
 # 다중 벡터 검색기 생성
 # 텍스트, 표, 이미지 요약본을 색인화하고 검색 시 원본 이미지를 반환하는 다중 벡터 검색기를 생성
 # 이 검색기는 다양한 데이터 유형을 통합적으로 처리할 수 있는 기능을 제공하여 멀티 모달 검색을 가능하게 함
@@ -191,7 +199,6 @@ from langchain.retrievers.multi_vector import MultiVectorRetriever # 텍스트, 
 from langchain_chroma.vectorstores import Chroma
 from langchain.storage import InMemoryStore # 메모리 기반 저장소 사용
 from langchain_core.documents import Document # 문서 데이터 표현 모듈
-from langchain_openai import OpenAIEmbeddings
 from langchain_experimental.open_clip import OpenCLIPEmbeddings # 각각 클립 별로 텍스트와 이미지를 임베딩
 
 # 요약본 색인화하고 원본 데이터 반환
@@ -225,7 +232,7 @@ def create_multi_vector_retriever(
       Document(page_content=s, metadata={id_key: doc_ids[i]}) for i, s in enumerate(doc_summaries)
     ]
 
-    retriever.vetorstore.add_documents(summary_docs)
+    retriever.vectorstore.add_documents(summary_docs) # 수정
     retriever.docstore.mset(list(zip(doc_ids, doc_contents))) # mset: 여러개의 키-값 쌍을 한 번에 설정하는 메서드
 
   # 텍스트, 테이블, 이미지 별 구분
@@ -336,7 +343,7 @@ def is_image_data(b64data):
     for sig in image_signatures.items():
       if header.startswith(sig):
         return True
-      return False
+    return False # 수정
   except Exception:
     return False
 
@@ -369,6 +376,8 @@ def split_image_text_types(docs):
     if looks_like_base64(doc) and is_image_data(doc): # 입력된 문자열이 base64이고, 이 문자열이 이미지 데이터일 때
       doc = resize_base64_image(doc, size=(1300, 600))
       b64_images.append(doc)
+    else:
+      texts.append(doc) # 수정
   return {"images": b64_images, "texts": texts}
 
 # 투자 조언을 제공하는 멀티 모달 분석을 위한 프롬프트 메시지를 생성
@@ -380,8 +389,8 @@ def img_prompt_func(data_dict):
   messages = []
 
   # 이미지가 포함된 경우 메시지에 추가
-  if data_dict["context"]["texts"]:
-    for image in data_dict["context"]["texts"]:
+  if data_dict["context"]["images"]:
+    for image in data_dict["context"]["images"]: # 수정
       image_message = {
         "type": "image_url",
         "image_url": {"url": f'data:image/jpeg;base64, {image}'}
@@ -462,7 +471,7 @@ korean_convert_rag = korean_convert_rag()
 final_multimodal_rag = chain_multimodal_rag | korean_convert_rag
 
 # 조회 결과 확인 및 RAG 체인 생성
-query = "주가 변동률과 가장 관련 있는 자료를 찾아주세요."
+query = "코스피와 관련된 종합적인 전망을 알려주세요."
 docs = retriever_multi_vector_img(query)
 
 # 변환된 결과 개수 
@@ -472,3 +481,6 @@ print("=" * 50)
 
 # 첫번째 문서를 이미지로 표시
 plt_img_base64(docs[0])
+
+# 텍스트와 이미지 데이터를 모두 활용하여 최적의 답변을 생성
+print(chain_multimodal_rag.invoke({query}))
