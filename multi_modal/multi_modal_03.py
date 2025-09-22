@@ -56,7 +56,7 @@ def categorize_elements(raw_pdf_elements):
 
 # 파일 경로 설정
 fname = 'invest.pdf'
-fpath = os.path.join(os.path.dirname(current_directory), "multi_modal", "data")
+fpath = os.path.join(current_directory, "data")
 
 raw_pdf_elements = extract_pdf_elements(fpath, fname)
 
@@ -200,6 +200,7 @@ from langchain_chroma.vectorstores import Chroma
 from langchain.storage import InMemoryStore # 메모리 기반 저장소 사용
 from langchain_core.documents import Document # 문서 데이터 표현 모듈
 from langchain_experimental.open_clip import OpenCLIPEmbeddings # 각각 클립 별로 텍스트와 이미지를 임베딩
+from langchain_openai import OpenAIEmbeddings
 
 # 요약본 색인화하고 원본 데이터 반환
 def create_multi_vector_retriever(
@@ -248,7 +249,7 @@ def create_multi_vector_retriever(
 # 임베딩 모델을 설정하고 벡터 저장소를 초기화한다.
 # OpenCLIPEmbeddings를 사용하여 이미지와 텍스트 데이터를 임베딩한다.
 # Chroma 벡터 저장소는 이러한 임베딩을 저장하고 검색하는 데 사용된다.
-embedding = OpenCLIPEmbeddings()
+embedding = OpenAIEmbeddings()
 
 # 벡터 저장소 생성
 vectorstore = Chroma(
@@ -472,15 +473,20 @@ final_multimodal_rag = chain_multimodal_rag | korean_convert_rag
 
 # 조회 결과 확인 및 RAG 체인 생성
 query = "코스피와 관련된 종합적인 전망을 알려주세요."
-docs = retriever_multi_vector_img(query)
+docs = retriever_multi_vector_img.invoke(query)
 
 # 변환된 결과 개수 
 print(len(docs))
 
 print("=" * 50)
 
+# 이미지 요약 확인
+print(image_summaries[3])
+
+print("=" * 50)
+
 # 첫번째 문서를 이미지로 표시
-plt_img_base64(docs[0])
+# plt_img_base64(docs[0])
 
 # 텍스트와 이미지 데이터를 모두 활용하여 최적의 답변을 생성
-print(chain_multimodal_rag.invoke({query}))
+print(chain_multimodal_rag.invoke(query))
