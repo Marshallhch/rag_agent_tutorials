@@ -31,7 +31,7 @@ def image_summarize(img_base64, prompt):
     ]
   )
 
-  print(msg)
+  # print(msg)
   return msg.content
 
 # 주어진 경로 내의 이미지 파일들을 base64로 인코딩 후 각 이미지를 요약하여 리스트로 반환
@@ -82,5 +82,11 @@ figures_directory = os.path.join(current_directory, 'figures')
 
 # 이미지 요약 생성
 img_base64_list, image_summaries = generate_img_summaries(figures_directory)
-print(f"이미지 개수: {len(img_base64_list)}")
-print(f"이미지 요약 개수: {len(image_summaries)}")
+# print(f"이미지 개수: {len(img_base64_list)}")
+# print(f"이미지 요약 개수: {len(image_summaries)}")
+
+# content 정보만 출력
+print("=== 이미지 요약 내용 ===")
+for i, summary in enumerate(image_summaries):
+  print(f"\n[이미지 {i + 1}]")
+  print(summary)
