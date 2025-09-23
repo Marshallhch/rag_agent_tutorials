@@ -5,6 +5,7 @@
 import os
 import base64
 import chromadb
+import streamlit as st
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -70,19 +71,43 @@ def setup_chroma_db():
 
   return image_vdb
 
+# 기존에 존재하는 이미지가 있으면 IDs를 가져옴
+def get_existing_ids(image_vdb, dataset_folder):
+  existing_ids = []
+  # dataset_folder 내의 이미지 파일 수 계산
+  num_images = len([name for name in os.listdir(dataset_folder)])
+  print(f'데이터 폴더 전체 이미지 수: {num_images}')
+
+  records = image_vdb.query(
+    query_texts=[""], # 빈 문자열을 쿼리로 사용하여 모든 이미지를 검색
+    n_results=num_images,
+    include=['ids']
+  )
+  for record in records['ids']:
+    existing_ids.extend(record) # 기존 ids를 추가
+    print(f'{len(record)}개의 기존 IDs가 존재 합니다.')
+  return existing_ids
+
 # 이미지를 데이터베이스에 추가
 def add_images_to_db(image_vdb, dataset_folder):
+  existing_ids = get_existing_ids(image_vdb, dataset_folder)
   ids = []
   uris = []
 
   # 폴더에서 이미지를 읽어와서 데이터베이스에 추가
   for i, filename in enumerate(sorted(os.listdir(dataset_folder))):
     if filename.endswith('.png'):
-      file_path = os.path.join(dataset_folder, filename)
-      ids.append(str(i))
-      uris.append(file_path)
-  image_vdb.add(ids=ids, uris=uris)
-  print('이미지가 데이터베이스에 추가되었습니다.')
+      img_id = str(i)
+      if img_id not in existing_ids:
+        file_path = os.path.join(dataset_folder, filename)
+        ids.append(str(i))
+        uris.append(file_path)
+
+  if ids:
+    image_vdb.add(ids=ids, uris=uris)
+    print('이미지가 데이터베이스에 추가되었습니다.')
+  else:
+    print('추가할 새로운 이미지가 없습니다.')
 
 # 사용자가 입력한 질문을 바탕으로 데이터베이스에서 가장 관련성 높은 이미지를 검색
 # 그 결과를 출력하는 기능 구현
@@ -98,12 +123,12 @@ def query_db(image_vdb, query, results=2):
   )
 
 # 결과를 출력하는 함수
-def print_results(results):
-  for idx, uri in enumerate(results['uris'][0]):
-    print(f'ID: {results['ids'][0][idx]}')
-    print(f'Distances: {results['distances'][0][idx]}')
-    print(f'Path: {uri}')
-    print("\n")
+# def print_results(results):
+#   for idx, uri in enumerate(results['uris'][0]):
+#     print(f'ID: {results['ids'][0][idx]}')
+#     print(f'Distances: {results['distances'][0][idx]}')
+#     print(f'Path: {uri}')
+#     print("\n")
 
 # OpenAI의 모델을 사용하여 사용자의 질문을 영어로 번역하고, 다시 한국어로 변환하는 기능을 추가
 # translate() 함수는 사용자가 입력한 질문을 영어로 번역하거나 영어로 답변된 내용을 한국어로 변환
@@ -155,32 +180,107 @@ def setup_vision_chain():
 # 이미지를 여러 장 넣거나 프롬프트 텍스트가 길면 곧바로 한도를 초과하므로 해상도와 품질, 개수를 꼭 조절해야 한다.
 # 제한을 넘기거나 인코딩이 손상되면 400 오류가 발생한다.
 def format_prompt_inputs(data, user_query):
-  pass
+  inputs = {}
+
+  # 사용자 질문을 딕셔너리에 추가
+  inputs['user_query'] = user_query
+
+  # 'uris' 리스트에서 첫 두 이미지 경로 가져오기
+  image_path_1 = data['uris'][0][0] # 첫 번째 이미지
+  image_path_2 = data['uris'][0][1] # 두 번째 이미지
+
+  # 첫번째 이미지 인코딩
+  with open(image_path_1, 'rb') as image_file:
+    image_data_1 = image_file.read()
+    inputs['image_data_1'] = base64.b64encode(image_data_1).decode('utf-8')
+  
+  # 두번째 이미지 인코딩
+  with open(image_path_2, 'rb') as image_file:
+    image_data_2 = image_file.read()
+    inputs['image_data_2'] = base64.b64encode(image_data_2).decode('utf-8')
+
+  # inputs 딕셔너리를 체인에 전달하면, LLM은 이미지와 텍스트를 동시에 고려하여 사용자에게 응답을 제공한다.
+  return inputs
+
+# 이미지를 base64로 로드 하는 함수
+def load_image_as_base64(image_path):
+  with open(image_path, 'rb') as img_file:
+    return base64.b64encode(img_file.read()).decode('utf-8')
 
 # ==================main=================== #
 
 def main():
+  st.set_page_config(page_title='FashionRAG', layout="wide")
+  st.title('패션 및 스타일링 어시스턴트')
+
   # 데이터셋 폴더 및 이미지가 있는지 확인
   dataset_folder = os.path.join(current_directory, 'fasion_dataset')
   
   if not os.path.exists(dataset_folder) or not any(fname.endswith('.png') for fname in os.listdir(dataset_folder)):
-    dataset, dataset_folder = setup_dataset()
-    save_images(dataset, dataset_folder)
+    with st.spinner("데이터셋 설정 및 이미지 저장 중 ..."):
+      dataset, dataset_folder = setup_dataset()
+      save_images(dataset, dataset_folder)
+    st.success("데이터셋 설정 및 이미지 저장")
   else:
-    print('데이터셋 폴더와 이미지가 존재합니다. 설정을 건너뜁니다.')
+    st.info('데이터셋 폴더와 이미지가 존재합니다. 설정을 건너뜁니다.')
 
   # 이미지를 효율적으로 검색하기 위해 벡터 데이터베이스가 설정되어 있는지 확인
   # 설정되어 있지 않다면 setup_chroma_db() 함수를 호출하여 벡터 데이터베이스를 생성하고
   # add_images_to_db()를 통해 이미지를 추가한다.
   vdb_path = os.path.join(current_directory, 'img_vdb')
   if not os.path.exists(vdb_path) or not os.listdir(vdb_path):
-    image_vdb = setup_chroma_db()
-    add_images_to_db(image_vdb, dataset_folder)
+    with st.spinner("데이터셋 설정 및 이미지 저장 중 ..."):
+      image_vdb = setup_chroma_db()
+      add_images_to_db(image_vdb, dataset_folder)
+    st.success("벡터 데이터베이스 설정 및 이미지 추가 완료")
   else:
-    print('벡터 데이터베이스가 존재합니다. 설정을 건너 뜁니다.')
+    st.info('벡터 데이터베이스가 존재합니다. 설정을 건너 뜁니다.')
     image_vdb = setup_chroma_db()
 
+  # 이미지를 기반으로 패션 스타일링 조언을 제공하기 위해 vision_chain을 설정
+  # setup_vision_chain() 함수를 호출하여 LLM 모델을 사용한 시각 정보 처리 체인을 생성
+  vision_chain = setup_vision_chain()
+  st.header('스타일링 조언을 받아보세요.')
 
+  # 사용자로부터 지속적으로 질문을 받기 위해 무한 루프 사용
+
+  # while True:
+  #   print('RAG 서비스가 준비됐습니다.')
+  #   print('오늘 어떤 스타일에 대한 조언을 받고 싶은가요? (종료하려면 "quit" 입력)')
+
+  query_ko = st.text_input("스타일링에 대한 질문을 입력하세요: ")
+
+  #   if query_ko.lower() == 'quit':
+  #     break
+  if query_ko:
+    with st.spinner('번역 및 쿼리 진행 중 ...'):
+      # 영어로 번역
+      query_en = translate(query_ko, 'English')
+      results = query_db(image_vdb, query_en, results=2)
+      # 프롬프트 입력
+      prompt_input = format_prompt_inputs(results, query_en)
+      # 영어로 답변 생성
+      response_en = vision_chain.invoke(prompt_input)
+      # 한국어로 번력
+      response_ko = translate(response_en, "Korean")
+    
+    st.subheader('검색된 이미지: ')
+    
+    for idx, uri in enumerate(results['uris'][0]):
+      img_base64 = load_image_as_base64(uri)
+      img_data_url = f'data:image/jpeg;base64, {img_base64}'
+      st.image(img_data_url, caption=f'이미지 {idx + 1}', width=300)
+    st.subheader('스타일링 조언: ')
+    st.markdown(response_ko)
+
+    # print('\n검색된 이미지')
+    # print_results(results)
+
+    # print("=" * 100)
+
+    # print("\nfashion rag 응답: ")
+    # print(response_ko)
+    
 
 # 프로그램 실행
 if __name__ == "__main__":

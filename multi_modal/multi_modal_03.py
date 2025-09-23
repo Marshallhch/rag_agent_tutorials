@@ -247,7 +247,7 @@ def create_multi_vector_retriever(
   return retriever
 
 # 임베딩 모델을 설정하고 벡터 저장소를 초기화한다.
-# OpenCLIPEmbeddings를 사용하여 이미지와 텍스트 데이터를 임베딩한다.
+# OpenAIEmbeddings를 사용하여 이미지와 텍스트 데이터를 임베딩한다.
 # Chroma 벡터 저장소는 이러한 임베딩을 저장하고 검색하는 데 사용된다.
 embedding = OpenAIEmbeddings()
 
