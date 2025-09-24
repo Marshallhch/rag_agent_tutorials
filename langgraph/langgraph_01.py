@@ -98,7 +98,7 @@ workflow.add_node('tools', tool_node)
 # 첫 진입점을 agent로 설정: 첫 번째로 호출되는 노드
 workflow.set_entry_point('agent')
 
-# 정보 검색 조건무 경로 추가
+# 정보 검색 조건부 경로 추가
 workflow.add_conditional_edges(
   'agent', # 첫 진입 노드
   should_continue # 다음으로 어느 노드가 호출될지 결정
