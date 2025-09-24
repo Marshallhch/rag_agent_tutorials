@@ -1,3 +1,4 @@
 .env
 /envs
 /fasion_rag/fasion_dataset
+/crewai_app/front/vite-project/node_modules
