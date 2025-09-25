@@ -1,7 +1,10 @@
 import './App.css';
 import styled from 'styled-components';
+import axios from 'axios';
 import InputGroup from './components/InputGroup';
 import LoadingSpinner from './components/LoadingSpinner';
+import ResultDisplay from './components/ResultDisplay';
+
 import { useState } from 'react';
 
 const AppContainer = styled.div`
@@ -27,10 +30,27 @@ const Description = styled.p`
 
 function App() {
   const [loading, setLoading] = useState(false);
+  const [topic, setTopic] = useState('');
+  const [result, setResult] = useState(null);
 
   const handleInputChange = (e) => {
-    console.log(e.target.value);
+    setTopic(e.target.value);
   };
+
+  const fetchData = async () => {
+    setResult(null);
+
+    try {
+      const response = await axios.post('http://localhost:8000/crewai', {
+        topic: topic,
+      });
+      setResult(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  console.log(result);
   return (
     <AppContainer>
       <Header>CrewAI 블로그 콘텐츠 생성기</Header>
@@ -40,7 +60,15 @@ function App() {
       {loading ? (
         <LoadingSpinner />
       ) : (
-        <InputGroup loading={loading} handleInputChange={handleInputChange} />
+        <>
+          <InputGroup
+            loading={loading}
+            handleInputChange={handleInputChange}
+            topic={topic}
+            fetchData={fetchData}
+          />
+          <ResultDisplay />
+        </>
       )}
     </AppContainer>
   );

@@ -44,15 +44,16 @@ const Button = styled.button`
   }
 `;
 
-const InputGroup = ({ loading, handleInputChange }) => {
+const InputGroup = ({ loading, handleInputChange, topic, fetchData }) => {
   return (
     <InputGroupWrapper>
       <Input
         type="text"
         placeholder="블로그 작성 주제를 입력해 주세요."
         onChange={handleInputChange}
+        value={topic}
       />
-      <Button disabled={loading}>
+      <Button disabled={loading} onClick={fetchData}>
         {loading ? '처리중...' : '콘텐츠 생성'}
       </Button>
     </InputGroupWrapper>
