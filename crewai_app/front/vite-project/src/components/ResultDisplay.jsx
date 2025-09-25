@@ -38,16 +38,18 @@ const DownloadButton = styled.button`
   }
 `;
 
-const ResultDisplay = () => {
+const ResultDisplay = ({ result, handleDownload }) => {
   return (
-    <ResultContainer>
-      <h2>작성한 콘텐츠를 다운로드해 보세요.</h2>
-      <ResultText>작성된 블로그 글</ResultText>
-      <DownloadButton>
-        <FaDownload style={{ marginRight: '8px' }} />
-        다운로드
-      </DownloadButton>
-    </ResultContainer>
+    result && (
+      <ResultContainer>
+        <h2>작성한 콘텐츠를 다운로드해 보세요.</h2>
+        <ResultText>{result.raw}</ResultText>
+        <DownloadButton onClick={handleDownload}>
+          <FaDownload style={{ marginRight: '8px' }} />
+          다운로드
+        </DownloadButton>
+      </ResultContainer>
+    )
   );
 };
 

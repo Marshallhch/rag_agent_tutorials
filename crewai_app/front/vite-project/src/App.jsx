@@ -28,10 +28,18 @@ const Description = styled.p`
   font-size: 1.2rem;
 `;
 
+const Error = styled.div`
+  color: red;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 1.2rem;
+`;
+
 function App() {
   const [loading, setLoading] = useState(false);
   const [topic, setTopic] = useState('');
   const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
 
   const handleInputChange = (e) => {
     setTopic(e.target.value);
@@ -39,6 +47,8 @@ function App() {
 
   const fetchData = async () => {
     setResult(null);
+    setLoading(true);
+    setError('');
 
     try {
       const response = await axios.post('http://localhost:8000/crewai', {
@@ -46,11 +56,23 @@ function App() {
       });
       setResult(response.data);
     } catch (error) {
-      console.log(error);
+      setError(error.response ? error.response.data.error : error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  console.log(result);
+  const handleDownload = () => {
+    const element = document.createElement('a');
+    // https://teveloper.tistory.com/6
+    const file = new Blob([result.raw], { type: 'text/plain' });
+
+    element.href = URL.createObjectURL(file);
+    element.download = 'raw_data.txt';
+    document.body.appendChild(element);
+    element.click();
+  };
+
   return (
     <AppContainer>
       <Header>CrewAI 블로그 콘텐츠 생성기</Header>
@@ -67,7 +89,8 @@ function App() {
             topic={topic}
             fetchData={fetchData}
           />
-          <ResultDisplay />
+          {error && <Error>{error}</Error>}
+          <ResultDisplay result={result} handleDownload={handleDownload} />
         </>
       )}
     </AppContainer>
